@@ -14,3 +14,5 @@ To initialize the plugin, use a DA on 'Page Load' and select 'LIB4X - Validation
 The this.data object in the event handler will have extended context like the formData above. For IG, it will have an activeRow object with native values of all column items. For IG, it will also give direct handles to the underlying model and gridView.
 
 See demo and example: [demo page](https://apex.oracle.com/pls/apex/r/yola/demo/task-validation) 
+
+Needless to say, your server-side validations remain important as they only give real protection. Client-side validations are on top for instant feedback without round-trips to the server.
