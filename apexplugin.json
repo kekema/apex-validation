@@ -27,7 +27,7 @@
         "plugin" : {
           "internalName" : "LIB4X.AXT.VALIDATION",
           "type" : "dynamic action",
-	  "demo" : "https://apex.oracle.com/pls/apex/r/yola/demo/employees-refresh",
+	  "demo" : "https://apex.oracle.com/pls/apex/r/yola/demo/task-validation",
 	  "previewImage" : "https://github.com/kekema/apex-refresh-current-page/blob/main/refresh-region-keep-pagination.jpg?raw=true"
         }
       }
