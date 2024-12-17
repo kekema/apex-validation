@@ -11,4 +11,6 @@ The 'Validate Page' and 'Validate IG Row' events do support validation logic on 
 
 To initialize the plugin, use a DA on 'Page Load' and select 'LIB4X - Validation'. Select if you want to use 'Instant Validation'.
 
-See for demo and more comments: [demo page](https://apex.oracle.com/pls/apex/r/yola/demo/task-validation) 
+The this.data object in the event handler will have extended context like the formData above. For IG, it will have an activeRow object with native values of all column items. For IG, it will also give direct handles to the underlying model and gridView.
+
+See demo and example: [demo page](https://apex.oracle.com/pls/apex/r/yola/demo/task-validation) 
