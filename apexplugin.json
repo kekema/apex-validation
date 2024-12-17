@@ -28,7 +28,7 @@
           "internalName" : "LIB4X.AXT.VALIDATION",
           "type" : "dynamic action",
 	  "demo" : "https://apex.oracle.com/pls/apex/r/yola/demo/task-validation",
-	  "previewImage" : "https://github.com/kekema/apex-refresh-current-page/blob/main/refresh-region-keep-pagination.jpg?raw=true"
+	  "previewImage" : "https://github.com/kekema/apex-validation/blob/main/custom-client-side-validation.jpg?raw=true"
         }
       }
     }
