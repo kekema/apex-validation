@@ -7,7 +7,7 @@ This APEX plugin offers 'Validate Item', 'Validate Page' and 'Validate IG Row' e
 
 Custom validation can be defined for all Item Types, and for both IG Column Items as well as regular Items. 
 
-The 'Validate Page' and 'Validate IG Row' events do support validation logic on the page/row level.
+The 'Validate Page' and 'Validate IG Row' events do support validation logic on the page/row level. For 'Validate Page', the 'Selection Type' is 'JavaScript Expression': apex.gPageContext$
 
 To initialize the plugin, use a DA on 'Page Load' and select 'LIB4X - Validation'. Select if you want to use 'Instant Validation'.
 
