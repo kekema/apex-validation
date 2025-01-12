@@ -20,6 +20,11 @@ begin
           p_version   => NULL
     ); 
 
+    apex_css.add_file (
+        p_name => 'lib4x-validation',
+        p_directory => p_plugin.file_prefix || 'css/' 
+    );    
+
     l_result.javascript_function := 'lib4x.axt.validation._init';
     l_result.ajax_identifier     := apex_plugin.get_ajax_identifier;
     l_result.attribute_01        := p_dynamic_action.attribute_01;  -- instant validation attribute
