@@ -1,0 +1,30 @@
+/* In case of error, an inserted row should have a red triangle, just 
+   like APEX also does changed rows */
+.a-GV-row.is-inserted.is-error .a-GV-rowHeader .a-GV-rownum,
+.a-GV-row.is-inserted.is-error .a-GV-selHeader:before {
+    color: var(--a-palette-danger);
+}
+
+/* In case of error, have the triangle a bit bigger */
+.a-GV-row.is-inserted.is-error .a-GV-selHeader:before,
+.a-GV-row.is-updated.is-error .a-GV-selHeader:before {    
+    content: "";
+    border: 5px solid;
+    border-color: currentColor currentColor transparent transparent;
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+}
+
+/* In case of an inserted row, APEX is not giving a (blue) triangle. We add it here. 
+   By this, we also have a triangle in case of an error which we can make red then (see above)*/
+.a-GV-row.is-inserted .a-GV-selHeader:before { 
+    content: "";
+    border: 3px solid;
+    border-color: currentColor currentColor transparent transparent;
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+}
