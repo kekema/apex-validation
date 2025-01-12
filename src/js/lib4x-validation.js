@@ -52,7 +52,7 @@ lib4x.axt.validation = (function($)
             for (const [itemId, apexItem] of Object.entries(apex.items)) {
                 if ((apexItem.item_type != "HIDDEN") && (apexItem.getValidity))
                 {
-                    let isColumnItem = util.item.isColumnItem(apexItem);
+                    let isRowItem = util.item.isRowItem(apexItem);
                     // expand getValidity
                     let origGetValidity = apexItem.getValidity;
                     apexItem.getValidity = function(){
@@ -80,7 +80,7 @@ lib4x.axt.validation = (function($)
                                 // If the readonly attribute is specified on an input element, the element is barred from constraint validation.
                                 if (!(isHTML5validation && (apexItem.element.is('[readonly]'))))
                                 {
-                                    let eventObj = initEventObj(itemId, apexItem, isColumnItem);
+                                    let eventObj = initEventObj(itemId, apexItem, isRowItem);
                                     apex.event.trigger(apexItem.element, 'lib4x_validate_item', eventObj);
                                     if (!eventObj.valid)
                                     {
@@ -108,7 +108,7 @@ lib4x.axt.validation = (function($)
                         }
                         return validity;
                     }
-                    if (!isColumnItem && instantValidation)
+                    if (!isRowItem && instantValidation)
                     {
                         // keep dirty flag
                         // when user enters a value and then reverts it again, item.isChanged will
@@ -172,12 +172,11 @@ lib4x.axt.validation = (function($)
         }
 
         // initialize event object for item validation
-        function initEventObj(itemId, apexItem, isColumnItem)
+        function initEventObj(itemId, apexItem, isRowItem)
         {
             let eventObj = {};
             eventObj.itemId = itemId;
             eventObj.apexItem = apexItem;
-            eventObj.isChanged = apexItem.isChanged();
             eventObj.value = apexItem.getValue();
             eventObj.nativeValue = util.item.getNativeValue(apexItem);
             if (apexItem.item_type == "NUMBER")
@@ -193,28 +192,55 @@ lib4x.axt.validation = (function($)
             {
                 eventObj.displayValue = util.item.getDisplayValue(apexItem, eventObj);
             } 
-            if (isColumnItem)
+            if (isRowItem)
             {
-                let widget = apexItem.element.closest('.a-IG');
-                if (widget.length)
+                let widget$ = apexItem.element.closest('.a-IG');    // IG grid/single row view (SRV)
+                if (widget$.length)
                 {
-                    let gridView = widget.interactiveGrid('getViews').grid;
-                    let model = gridView.model;
-                    eventObj.gridView = gridView;
-                    eventObj.model = model;
-                    eventObj.singleRowMode = gridView.singleRowMode;
-                    eventObj.subwidgetInst = util.ig.getCurrentSubwidgetInst(gridView);
+                    eventObj.regionStaticId = widget$.interactiveGrid('option').config.regionStaticId;
+                    let gridView = widget$.interactiveGrid('getViews').grid;
+                    eventObj.model = gridView.model;
                     eventObj.activeRecordId = gridView.getActiveRecordId();
-                    eventObj.activeRecord = util.ig.getActiveRecord(gridView);
-                    eventObj.activeRecordMetadata = model.getRecordMetadata(eventObj.activeRecordId);
+                    // when record is deleted, still getValidity is called by APEX, but there might be no active record
+                    if (eventObj.activeRecordId)
+                    {
+                        eventObj.activeRecord = util.ig.getActiveRecord(gridView);
+                        eventObj.activeRecordMetadata = eventObj.model.getRecordMetadata(eventObj.activeRecordId);
+                    }
                     let columns = gridView.view$.grid('getColumns');
                     eventObj.property = columns.find(c=>c.elementId == itemId)?.property;
-                    eventObj.activeRow = util.ig.getActiveRow(gridView);
+                    eventObj.rowData = util.ig.getRowData(gridView);
                     let origRecord = eventObj.activeRecordMetadata?.original;
-                    if (eventObj.property)
+                    if (eventObj.property && (origRecord || eventObj.activeRecord))
                     {
-                        eventObj.oldValue = model.getValue(origRecord ? origRecord : eventObj.activeRecord, eventObj.property);
+                        eventObj.oldValue = eventObj.model.getValue(origRecord ? origRecord : eventObj.activeRecord, eventObj.property);
                     }
+                }
+                else
+                {
+                    widget$ = apexItem.element.closest('.a-RV');    // row view, implemented by recordView widget
+                    // can be an RV in context of an ERV, but also in other context!
+                    if (widget$.length)
+                    {
+                        // for LIB4X ERV, regionStaticId will be set as an option on the recordView
+                        // for other situations, it might just give null
+                        eventObj.regionStaticId = widget$.recordView('option', 'regionStaticId');
+                        eventObj.model = widget$.recordView('getModel');
+                        eventObj.activeRecordId = widget$.recordView('getActiveRecordId');
+                        if (eventObj.activeRecordId)
+                        {
+                            eventObj.activeRecord = widget$.recordView('getActiveRecord');
+                            eventObj.activeRecordMetadata = eventObj.model.getRecordMetadata(eventObj.activeRecordId);
+                        }
+                        let fields = widget$.recordView('option', 'fields');
+                        eventObj.property = fields[0][Object.keys(fields[0]).filter((key)=> fields[0][key].elementId == 'c_name')]?.property;
+                        eventObj.rowData = util.recordView.getRecordData(widget$.attr('id'));
+                        let origRecord = eventObj.activeRecordMetadata?.original;
+                        if (eventObj.property && (origRecord || eventObj.activeRecord))
+                        {
+                            eventObj.oldValue = eventObj.model.getValue(origRecord ? origRecord : eventObj.activeRecord, eventObj.property);
+                        } 
+                    }                       
                 }
             }    
             else
@@ -236,7 +262,7 @@ lib4x.axt.validation = (function($)
         $(apex.gPageContext$).on("apexreadyend", function(jQueryEvent) {
             // for each IG, validate the active row upon endrecordedit and before save
             $('.a-IG').each(function(){  
-                let staticId = $(this).interactiveGrid('option').config.regionStaticId;
+                let regionStaticId = $(this).interactiveGrid('option').config.regionStaticId;
                 let gridView = $(this).interactiveGrid('getViews').grid;
                 let igActions = $(this).interactiveGrid('getActions');
                 let saveAction = igActions.lookup("save");
@@ -245,20 +271,41 @@ lib4x.axt.validation = (function($)
                     let origActionFunction = saveAction.action;
                     saveAction.action = function(jQueryEvent, element) {
                         let subwidgetInst = util.ig.getCurrentSubwidgetInst(gridView); 
-                        // make sure the grid (or recordView) is done editing a cell
+                        // make sure the grid (or recordView) is done any editing
                         subwidgetInst.finishEditing().done( () => {
                             if (inEditMode(gridView))
                             {
                                 // do any needed validation as apex is skipping endrecordedit upon save click
-                                validateActiveRow(staticId);
-                            }                            
-                            origActionFunction(jQueryEvent, element);
+                                validateActiveRow(regionStaticId);
+                                origActionFunction(jQueryEvent, element);
+                            }  
+                            else
+                            {
+                                // check any related external row view
+                                // only one view (gridView or ext recordView) can be in edit mode
+                                let rv$ = $('.lib4x-ig-erv .a-RV').filter(function() {
+                                    // model regionStaticId is the IG static Id
+                                    return (($(this).recordView('getModel').getOption('regionStaticId') == regionStaticId) && ($(this).recordView('inEditMode'))) 
+                                }).first(); // take first to be sure
+                                if (rv$.length)
+                                {
+                                    let finishEditing = rv$.recordView('finishEditing');
+                                    finishEditing.done( () => {
+                                        rowViewsModule.validateActiveRow(rv$);
+                                        origActionFunction(jQueryEvent, element);
+                                    });
+                                }  
+                                else
+                                {
+                                    origActionFunction(jQueryEvent, element);
+                                }                            
+                            }                          
                         });
                     };  
                 }                                      
                 // apexendrecordedit
                 $(this).on('apexendrecordedit', function(jQueryEvent){
-                    validateActiveRow(staticId);
+                    validateActiveRow(regionStaticId);
                 });  
             });
         });
@@ -267,9 +314,9 @@ lib4x.axt.validation = (function($)
         // APEX has no specific row validation configuration, but 
         // offers the model.setValidity API, which we utilize here
         // upon firing the 'Validate Row' event
-        function validateActiveRow(staticId)
+        function validateActiveRow(regionStaticId)
         {
-            let gridView = apex.region(staticId).call('getViews').grid;
+            let gridView = apex.region(regionStaticId).call('getViews').grid;
             let activeRecordId = gridView.getActiveRecordId();
             if (activeRecordId)
             {
@@ -280,15 +327,11 @@ lib4x.axt.validation = (function($)
                 let recordChanged = modelsModule.util.recordInEditMode(eventObj.activeRecordMetadata);
                 if (recordChanged)
                 {
-                    let ig$ = $('#' + staticId);
-                    eventObj.staticId = staticId;
-                    eventObj.activeRow = util.ig.getActiveRow(gridView);
-                    eventObj.columnItemsValid = modelsModule.util.recordFieldsValid(eventObj.activeRecordMetadata);                        
-                    eventObj.gridView = gridView;
+                    let ig$ = $('#' + regionStaticId);
+                    eventObj.regionStaticId = regionStaticId;
+                    eventObj.rowData = util.ig.getRowData(gridView);
+                    eventObj.rowItemsValid = modelsModule.util.recordFieldsValid(eventObj.activeRecordMetadata);
                     eventObj.model = gridView.model;
-                    eventObj.singleRowMode = eventObj.gridView.singleRowMode;
-                    eventObj.currentViewId = apex.region(staticId).call('getCurrentViewId');
-                    eventObj.subwidgetInst = util.ig.getCurrentSubwidgetInst(gridView);
                     eventObj.valid = true;
                     eventObj.validationMessage = "";
                     apex.event.trigger(ig$, 'lib4x_ig_validate_row', eventObj);
@@ -314,6 +357,65 @@ lib4x.axt.validation = (function($)
             validateActiveRow: validateActiveRow
         }
     })();    
+
+    // ==rowViews module 
+    // Can be an IG External Row View, or some 
+    // other Row View (outside of IG) implemented by recordView widget
+    let rowViewsModule = (function() {
+        $(apex.gPageContext$).on("apexreadyend", function(jQueryEvent) {
+            // for each RV, validate the active row upon endrecordedit
+            $('.a-RV').each(function(){  
+                // apexendrecordedit
+                $(this).on('apexendrecordedit lib4x_rv_do_validate_row', function(jQueryEvent){
+                    validateActiveRow($(this));
+                });  
+            });
+        });
+
+        // gives validation feedback for any active row
+        // APEX has no specific record validation configuration, but 
+        // offers the model.setValidity API, which we utilize here
+        // upon firing the 'Validate Row' event
+        function validateActiveRow(widget$)
+        {
+            let rvStaticIdRv = widget$.attr('id');
+            // for LIB4X ERV, regionStaticId will be set as an option on the recordView
+            // for other situations, it might just give null
+            let regionStaticId = widget$.recordView('option', 'regionStaticId');
+            let activeRecordId = widget$.recordView('getActiveRecordId');
+            if (activeRecordId)
+            {
+                let model = widget$.recordView('getModel');
+                let eventObj = {};
+                eventObj.activeRecordId = activeRecordId;
+                eventObj.activeRecord = widget$.recordView('getActiveRecord');
+                eventObj.activeRecordMetadata = model.getRecordMetadata(activeRecordId);                 
+                let recordChanged = modelsModule.util.recordInEditMode(eventObj.activeRecordMetadata);
+                if (recordChanged)
+                {
+                    eventObj.regionStaticId = regionStaticId;
+                    eventObj.rowData = util.recordView.getRecordData(rvStaticIdRv);
+                    eventObj.rowItemsValid = modelsModule.util.recordFieldsValid(eventObj.activeRecordMetadata);                        
+                    eventObj.model = model;
+                    eventObj.valid = true;
+                    eventObj.validationMessage = "";
+                    apex.event.trigger(widget$, 'lib4x_rv_validate_row', eventObj);
+                    if (!eventObj.valid)
+                    {
+                        model.setValidity("error", eventObj.activeRecordId, null, eventObj.validationMessage ? eventObj.validationMessage : "Invalid Row");
+                    }
+                    else 
+                    {
+                        model.setValidity("valid", eventObj.activeRecordId);
+                    }                          
+                } 
+            }           
+        }   
+        
+        return{
+            validateActiveRow: validateActiveRow
+        }
+    })();     
 
     // ==models module
     let modelsModule = (function() {
@@ -353,9 +455,12 @@ lib4x.axt.validation = (function($)
     let util = {    
         item:
         {
-            isColumnItem: function(apexItem)
+            isRowItem: function(apexItem)
             {
-                return (apexItem.element.closest('.a-GV-columnItem').length > 0);
+                // A row item is an item in an IG grid, single row view, or in a 
+                // row view (outside of IG) implemented with recordView widget
+                return ((apexItem.element.closest('.a-GV-columnItem').length > 0) ||
+                        (apexItem.element.closest('.a-RV-fieldValue').length > 0));
             },
             getNativeValue: function(apexItem)
             {
@@ -442,8 +547,8 @@ lib4x.axt.validation = (function($)
             {
                 return (gridView.singleRowMode ? gridView.singleRowView$.recordView('getActiveRecord') : gridView.view$.grid('getActiveRecord'));
             },    
-            // getActiveRow: data from column items
-            getActiveRow: function(gridView)
+            // getRowData: data from column items
+            getRowData: function(gridView)
             {
                 let activeRow = null;
                 // check if there is a row active by checking the activeRecordId
@@ -454,13 +559,37 @@ lib4x.axt.validation = (function($)
                     let columns = gridView.view$.grid('getColumns');
                     for (column of columns)
                     {
-                        if (column.elementId)
+                        if (column.elementId && apex.items.hasOwnProperty(column.elementId))
                         {
                             activeRow[column.elementId] = util.item.getNativeValue(apex.item(column.elementId));
                         }
                     }
                 }
                 return activeRow;
+            }
+        },
+        recordView:
+        {
+            // getRecordData: data from RV fields
+            getRecordData: function(rvStaticIdRv)
+            {
+                let widget$ = $('#' + rvStaticIdRv);
+                let recordData = null;
+                // check if there is a record active by checking the activeRecordId
+                let activeRecordId = widget$.recordView('getActiveRecordId');
+                if (activeRecordId)
+                {
+                    recordData = {};
+                    let fields = widget$.recordView('getFields');
+                    for (field of fields)
+                    {
+                        if (field.elementId && apex.items.hasOwnProperty(field.elementId))
+                        {
+                            recordData[field.elementId] = util.item.getNativeValue(apex.item(field.elementId));
+                        }
+                    }
+                }
+                return recordData;
             }
         },
         page:
@@ -470,8 +599,8 @@ lib4x.axt.validation = (function($)
                 let formData = {};
                 for (const [itemId, apexItem] of Object.entries(apex.items)) 
                 {
-                    let isColumnItem = util.item.isColumnItem(apexItem);    
-                    if (!isColumnItem)
+                    let isRowItem = util.item.isRowItem(apexItem);    
+                    if (!isRowItem)
                     {
                         formData[itemId] = util.item.getNativeValue(apexItem);
                     }
@@ -493,6 +622,9 @@ lib4x.axt.validation = (function($)
         validatePageItem: itemsModule.validatePageItem,
         ig: {
             validateActiveRow: gridsModule.validateActiveRow
-        }
+        },
+        rv: {
+            validateActiveRow: rowViewsModule.validateActiveRow
+        }        
     }    
 })(apex.jQuery);      
