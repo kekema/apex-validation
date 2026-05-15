@@ -11,6 +11,10 @@ lib4x.axt.validation = (function($)
 {
     let instantValidation = false;      // instant show of any client-side validation messages
 
+    const [apexMajorVersion, apexMinorVersion, apexPatchVersion] = apex.env.APEX_VERSION.split(".").map(Number);
+    // region id property name as depending on the APEX version (regionStaticId/regionDomId)
+    let regionIdPropertyName = apexMajorVersion >= 26 ? 'regionDomId' : 'regionStaticId';     
+
     // ==page module
     let pageModule = (function() 
     {
@@ -197,7 +201,7 @@ lib4x.axt.validation = (function($)
                 let widget$ = apexItem.element.closest('.a-IG');    // IG grid/single row view (SRV)
                 if (widget$.length)
                 {
-                    eventObj.regionStaticId = widget$.interactiveGrid('option').config.regionStaticId;
+                    eventObj[regionIdPropertyName] = widget$.interactiveGrid('option').config[regionIdPropertyName];
                     let gridView = widget$.interactiveGrid('getViews').grid;
                     eventObj.model = gridView.model;
                     eventObj.activeRecordId = gridView.getActiveRecordId();
@@ -222,9 +226,9 @@ lib4x.axt.validation = (function($)
                     // can be an RV in context of an ERV, but also in other context!
                     if (widget$.length)
                     {
-                        // for LIB4X ERV, regionStaticId will be set as an option on the recordView
+                        // for LIB4X ERV, regionStaticId (24.2)/regionDomId(26.1) will be set as an option on the recordView
                         // for other situations, it might just give null
-                        eventObj.regionStaticId = widget$.recordView('option', 'regionStaticId');
+                        eventObj[regionIdPropertyName] = widget$.recordView('option', regionIdPropertyName);
                         eventObj.model = widget$.recordView('getModel');
                         eventObj.activeRecordId = widget$.recordView('getActiveRecordId');
                         if (eventObj.activeRecordId)
@@ -262,7 +266,7 @@ lib4x.axt.validation = (function($)
         $(apex.gPageContext$).on("apexreadyend", function(jQueryEvent) {
             // for each IG, validate the active row upon endrecordedit and before save
             $('.a-IG').each(function(){  
-                let regionStaticId = $(this).interactiveGrid('option').config.regionStaticId;
+                let regionElementId = $(this).interactiveGrid('option').config[regionIdPropertyName];
                 let gridView = $(this).interactiveGrid('getViews').grid;
                 let igActions = $(this).interactiveGrid('getActions');
                 let saveAction = igActions.lookup("save");
@@ -276,7 +280,7 @@ lib4x.axt.validation = (function($)
                             if (inEditMode(gridView))
                             {
                                 // do any needed validation as apex is skipping endrecordedit upon save click
-                                validateActiveRow(regionStaticId);
+                                validateActiveRow(regionElementId);
                                 origActionFunction(jQueryEvent, element);
                             }  
                             else
@@ -284,8 +288,8 @@ lib4x.axt.validation = (function($)
                                 // check any related external row view
                                 // only one view (gridView or ext recordView) can be in edit mode
                                 let rv$ = $('.lib4x-ig-erv .a-RV').filter(function() {
-                                    // model regionStaticId is the IG static Id
-                                    return (($(this).recordView('getModel').getOption('regionStaticId') == regionStaticId) && ($(this).recordView('inEditMode'))) 
+                                    // model regionStaticId (24.2) / regionDomId (26.1) is the IG element Id
+                                    return (($(this).recordView('getModel').getOption(regionIdPropertyName) == regionElementId) && ($(this).recordView('inEditMode'))) 
                                 }).first(); // take first to be sure
                                 if (rv$.length)
                                 {
@@ -305,7 +309,7 @@ lib4x.axt.validation = (function($)
                 }                                      
                 // apexendrecordedit
                 $(this).on('apexendrecordedit', function(jQueryEvent){
-                    validateActiveRow(regionStaticId);
+                    validateActiveRow(regionElementId);
                 });  
             });
         });
@@ -314,9 +318,9 @@ lib4x.axt.validation = (function($)
         // APEX has no specific row validation configuration, but 
         // offers the model.setValidity API, which we utilize here
         // upon firing the 'Validate Row' event
-        function validateActiveRow(regionStaticId)
+        function validateActiveRow(regionElementId)
         {
-            let gridView = apex.region(regionStaticId).call('getViews').grid;
+            let gridView = apex.region(regionElementId).call('getViews').grid;
             let activeRecordId = gridView.getActiveRecordId();
             if (activeRecordId)
             {
@@ -327,8 +331,8 @@ lib4x.axt.validation = (function($)
                 let recordChanged = modelsModule.util.recordInEditMode(eventObj.activeRecordMetadata);
                 if (recordChanged)
                 {
-                    let ig$ = $('#' + regionStaticId);
-                    eventObj.regionStaticId = regionStaticId;
+                    let ig$ = $('#' + regionElementId);
+                    eventObj[regionIdPropertyName] = regionElementId;
                     eventObj.rowData = util.ig.getRowData(gridView);
                     eventObj.rowItemsValid = modelsModule.util.recordFieldsValid(eventObj.activeRecordMetadata);
                     eventObj.model = gridView.model;
@@ -379,9 +383,9 @@ lib4x.axt.validation = (function($)
         function validateActiveRow(widget$)
         {
             let rvStaticIdRv = widget$.attr('id');
-            // for LIB4X ERV, regionStaticId will be set as an option on the recordView
+            // for LIB4X ERV, regionStaticId(24.2)/regionDomId(26.1) will be set as an option on the recordView
             // for other situations, it might just give null
-            let regionStaticId = widget$.recordView('option', 'regionStaticId');
+            let regionElementId = widget$.recordView('option', regionIdPropertyName);
             let activeRecordId = widget$.recordView('getActiveRecordId');
             if (activeRecordId)
             {
@@ -393,7 +397,7 @@ lib4x.axt.validation = (function($)
                 let recordChanged = modelsModule.util.recordInEditMode(eventObj.activeRecordMetadata);
                 if (recordChanged)
                 {
-                    eventObj.regionStaticId = regionStaticId;
+                    eventObj[regionIdPropertyName] = regionElementId;
                     eventObj.rowData = util.recordView.getRecordData(rvStaticIdRv);
                     eventObj.rowItemsValid = modelsModule.util.recordFieldsValid(eventObj.activeRecordMetadata);                        
                     eventObj.model = model;
