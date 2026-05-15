@@ -16,3 +16,8 @@ The this.data object in the event handler will have extended context like the fo
 See demo and example: [demo page](https://apex.oracle.com/pls/apex/r/yola/demo/task-validation) 
 
 Needless to say, your server-side validations remain important as they only give real protection. Client-side validations are on top for instant feedback without round-trips to the server.
+
+<h4>Plugin Versions</h4>
+Version 1.0.0 - build under APEX 24.1<br>
+Version 1.1.0 - build under APEX 24.2<br>
+Version 1.1.1 - build under APEX 24.2    (minimum version for APEX 26.1)
